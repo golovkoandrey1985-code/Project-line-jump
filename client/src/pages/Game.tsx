@@ -1282,7 +1282,7 @@ export default function Game() {
   return (
     <div 
       className="min-h-screen flex items-start justify-center bg-gradient-to-b from-gray-900 to-gray-800"
-      onTouchEnd={(e) => {
+      onTouchStart={(e) => {
         if (gameState === 'playing') {
           e.preventDefault();
           handleTap();
@@ -1301,7 +1301,7 @@ export default function Game() {
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
           className="border-4 border-cyan-500 rounded-lg shadow-2xl cursor-pointer"
-          onTouchEnd={(e) => {
+          onTouchStart={(e) => {
             e.preventDefault();
             e.stopPropagation();
             handleTap();

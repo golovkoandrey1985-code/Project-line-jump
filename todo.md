@@ -540,3 +540,18 @@
 - [x] Использовать CSS переменные env(safe-area-inset-bottom)
 - [x] Применить padding-bottom с calc(2rem + env(safe-area-inset-bottom, 0px))
 - [ ] Протестировать на iPhone
+
+
+## БАЛАНС ОТСТУПОВ: iPhone 11 vs iPhone 14 Pro
+
+### Проблема
+- [ ] iPhone 11: кнопка видна хорошо
+- [ ] iPhone 14 Pro: кнопка съехала на половину вниз (слишком большой отступ)
+- [ ] calc(2rem + safe-area) дает ~66px на iPhone 14 Pro - слишком много
+
+### Решение
+- [x] Уменьшить фиксированный отступ с 2rem до 1rem
+- [x] Новая формула: calc(1rem + env(safe-area-inset-bottom, 0px))
+- [x] iPhone 11: ~16px + 20px = 36px (достаточно)
+- [x] iPhone 14 Pro: ~16px + 34px = 50px (оптимально)
+- [ ] Протестировать на обоих iPhone

@@ -68,7 +68,7 @@ export default function Landing() {
       </div>
 
       {/* Bottom Section - Play Button */}
-      <div className="flex-shrink-0 space-y-2 pb-2" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
+      <div className="flex-shrink-0 space-y-3 pb-8 md:pb-4">
         <div className="text-center">
           <Button
             onClick={() => setLocation("/game")}
@@ -80,7 +80,7 @@ export default function Landing() {
         </div>
 
         {/* Platform Support */}
-        <div className="flex items-center justify-center gap-3 text-gray-400 text-xs mb-2">
+        <div className="flex items-center justify-center gap-3 text-gray-400 text-xs mb-4">
           <span>💻 Десктоп</span>
           <span>•</span>
           <span>📱 Мобильные</span>

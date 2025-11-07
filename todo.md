@@ -516,6 +516,10 @@
 - [x] Добавить safe-area-inset-bottom для нижней секции
 - [x] Увеличить padding-bottom для кнопки (paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))')
 - [x] Добавить mb-2 для Platform Support
+- [x] Увеличить отступы еще больше (safe-area не сработал)
+- [x] Добавить фиксированный pb-8 для мобильных (pb-8 md:pb-4)
+- [x] Увеличить space-y с 2 до 3
+- [x] Увеличить mb Platform Support с 2 до 4
 - [ ] Протестировать на iPhone Safari
 
 ### Двойной тап не работает на iPhone 11

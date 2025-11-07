@@ -526,3 +526,17 @@
 - [x] Изменить onTouchEnd на onTouchStart для мгновенной реакции на iOS
 - [x] Применить к контейнеру и canvas
 - [ ] Протестировать на реальном iPhone 11
+
+
+## КРИТИЧНО: Viewport и Safe Area (07.11.2025)
+
+### Проблема
+- [x] Кнопка все еще не полностью видна на iPhone
+- [x] Viewport meta tag уже есть с viewport-fit=cover
+- [x] Не использовались CSS safe-area-inset переменные
+
+### Решение
+- [x] Viewport meta tag уже есть с viewport-fit=cover
+- [x] Использовать CSS переменные env(safe-area-inset-bottom)
+- [x] Применить padding-bottom с calc(2rem + env(safe-area-inset-bottom, 0px))
+- [ ] Протестировать на iPhone

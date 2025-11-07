@@ -68,7 +68,12 @@ export default function Landing() {
       </div>
 
       {/* Bottom Section - Play Button */}
-      <div className="flex-shrink-0 space-y-3 pb-8 md:pb-4">
+      <div 
+        className="flex-shrink-0 space-y-3" 
+        style={{ 
+          paddingBottom: 'calc(2rem + env(safe-area-inset-bottom, 0px))' 
+        }}
+      >
         <div className="text-center">
           <Button
             onClick={() => setLocation("/game")}

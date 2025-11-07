@@ -1,9 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { getCurrentLevel, setCurrentLevel, getLevelConfig, unlockLevel, isLevelUnlocked, LEVELS } from '../levels';
 
-// Адаптивные размеры canvas
-const CANVAS_WIDTH = typeof window !== 'undefined' ? Math.min(window.innerWidth, 800) : 800;
-const CANVAS_HEIGHT = typeof window !== 'undefined' ? window.innerHeight * 0.9 : 600; // 90% высоты экрана - fullscreen
+// Константы для расчета размеров
+const getCanvasSize = () => {
+  if (typeof window === 'undefined') return { width: 800, height: 600 };
+  return {
+    width: Math.min(window.innerWidth, 800),
+    height: window.innerHeight * 0.9
+  };
+};
+
 const GROUND_HEIGHT = 65; // Минимальная высота дороги
 const PLAYER_SIZE = 40;
 const PLAYER_X_POSITION = 50; // Максимально влево
@@ -106,6 +112,11 @@ export default function Game() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameState, setGameState] = useState<GameState>('menu');
   const [score, setScore] = useState(0);
+  
+  // Динамические размеры canvas
+  const [canvasSize, setCanvasSize] = useState(getCanvasSize);
+  const CANVAS_WIDTH = canvasSize.width;
+  const CANVAS_HEIGHT = canvasSize.height;
   const [baseScore, setBaseScore] = useState(0); // Базовые очки с предыдущих уровней
   const [lives, setLives] = useState(INITIAL_LIVES);
   const [currentLevelId, setCurrentLevelId] = useState(() => getCurrentLevel());
@@ -258,10 +269,27 @@ export default function Game() {
     // Тапы в воздухе без активного окна двойного тапа игнорируются
   };
 
-  // Обработка клавиатуры
+  // Динамическое изменение размера canvas
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && gameState === 'playing') {
+    const handleResize = () => {
+      const newSize = getCanvasSize();
+      setCanvasSize(newSize);
+      // Пересчитываем позицию игрока относительно новой высоты
+      playerYRef.current = newSize.height - GROUND_HEIGHT - PLAYER_SIZE;
+    };
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
+
+  // Обработчик клавиатуры
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {      if (e.key === 'Escape' && gameState === 'playing') {
         setGameState('paused');
       } else if (e.key === ' ' || e.key === 'ArrowUp') {
         e.preventDefault();

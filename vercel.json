@@ -1,6 +1,6 @@
 {
-  "buildCommand": "pnpm install && cd client && pnpm build",
-  "outputDirectory": "client/dist",
+  "buildCommand": "pnpm install && pnpm run build",
+  "outputDirectory": "dist/public",
   "installCommand": "pnpm install",
   "framework": null,
   "rewrites": [

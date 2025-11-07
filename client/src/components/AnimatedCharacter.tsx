@@ -186,6 +186,42 @@ export default function AnimatedCharacter() {
       ctx.fill();
       ctx.globalAlpha = 1;
 
+      // Глаза (большие блестящие)
+      // Белки
+      ctx.fillStyle = "#FFFFFF";
+      ctx.beginPath();
+      ctx.ellipse(slimeCenterX - 10, slimeCenterY - 3, 8, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(slimeCenterX + 10, slimeCenterY - 3, 8, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Зрачки
+      ctx.fillStyle = "#1a1a2e";
+      ctx.beginPath();
+      ctx.arc(slimeCenterX - 10, slimeCenterY - 1, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(slimeCenterX + 10, slimeCenterY - 1, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Блики в глазах
+      ctx.fillStyle = "#FFFFFF";
+      ctx.beginPath();
+      ctx.arc(slimeCenterX - 12, slimeCenterY - 3, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(slimeCenterX + 8, slimeCenterY - 3, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Улыбка
+      ctx.strokeStyle = "#1a1a2e";
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.arc(slimeCenterX, slimeCenterY + 5, 8, 0.2, Math.PI - 0.2);
+      ctx.stroke();
+
       animationRef.current = requestAnimationFrame(animate);
     };
 

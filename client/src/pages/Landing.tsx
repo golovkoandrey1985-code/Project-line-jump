@@ -71,7 +71,7 @@ export default function Landing() {
       <div 
         className="flex-shrink-0 space-y-3" 
         style={{ 
-          paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' 
+          paddingBottom: 'calc(3rem + env(safe-area-inset-bottom, 0px))' 
         }}
       >
         <div className="text-center">

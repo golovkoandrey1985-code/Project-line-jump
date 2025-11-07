@@ -20,7 +20,8 @@ const MAX_LIVES = 5;
 const GRAVITY = 0.8; // уменьшена для более плавного падения
 const JUMP_POWER = -15; // уменьшено под новую высоту canvas 500px
 const HIGH_JUMP_POWER = -18; // для высоких препятствий (уменьшено чтобы не уходить за экран)
-const DOUBLE_TAP_THRESHOLD = 600; // мс (увеличено для мобильных)
+const DOUBLE_TAP_THRESHOLD = 400; // мс - максимальное время между тапами
+const MIN_DOUBLE_TAP_INTERVAL = 50; // мс - минимальное время между тапами (защита от случайных срабатываний)
 
 // Препятствия (базовые настройки)
 const MIN_OBSTACLE_DISTANCE = 400; // увеличено с 300
@@ -227,7 +228,9 @@ export default function Game() {
     const isInAir = !isOnGround;
 
     // Случай 1: Второй тап в воздухе (двойной тап) - работает в любой момент полета!
-    if (waitingForSecondTapRef.current && timeSinceLastTap > 0 && timeSinceLastTap < DOUBLE_TAP_THRESHOLD) {
+    if (waitingForSecondTapRef.current && 
+        timeSinceLastTap >= MIN_DOUBLE_TAP_INTERVAL && 
+        timeSinceLastTap <= DOUBLE_TAP_THRESHOLD) {
       // Высокий прыжок или тройной (если есть способность)
       const jumpPower = hasTripleJump ? -22 : HIGH_JUMP_POWER; // Тройной прыжок еще выше
       playerVelocityYRef.current = jumpPower;

@@ -184,6 +184,9 @@ export default function Game() {
   const audio = useAudio();
   const { muted, setMuted, volume, setVolume } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
+
+  // Delta-time
+  const lastFrameTimeRef = useRef<number | null>(null);
   
   // Параллакс фона
   const bgOffsetRef = useRef(0);
@@ -376,9 +379,14 @@ export default function Game() {
     const gameLoop = () => {
       // Определяем текущее время в самом начале цикла
       const now = Date.now();
+      const nowPerf = performance.now();
+      const prev = lastFrameTimeRef.current ?? nowPerf;
+      const dtSec = Math.max(0.001, Math.min(0.05, (nowPerf - prev) / 1000));
+      lastFrameTimeRef.current = nowPerf;
+      const frameScale = dtSec * 60; // ~1 при 60 FPS
       // Обновляем параллакс только во время игры
       if (gameState === 'playing') {
-        bgOffsetRef.current += 2; // Движение фона
+        bgOffsetRef.current += 2 * frameScale; // Движение фона
       }
 
       // === ФОН ===
@@ -548,9 +556,9 @@ export default function Game() {
       // Обновляем и рисуем летающие объекты
       flyingObjectsRef.current = flyingObjectsRef.current.filter(obj => {
         // Обновляем позицию
-        obj.x += obj.vx;
+        obj.x += obj.vx * frameScale;
         if (obj.vy !== undefined) {
-          obj.y += obj.vy;
+          obj.y += obj.vy * frameScale;
         }
         
         // Удаляем если вышли за экран
@@ -739,8 +747,8 @@ export default function Game() {
         // При удержании — слабее тянет вниз; при отпускании — сильнее
         effectiveGravity = isInputDownRef.current ? 0.55 : 1.6;
       }
-      playerVelocityYRef.current += effectiveGravity;
-      playerYRef.current += playerVelocityYRef.current;
+      playerVelocityYRef.current += effectiveGravity * frameScale;
+      playerYRef.current += playerVelocityYRef.current * frameScale;
 
       // Проверка приземления
       if (playerYRef.current >= groundY) {
@@ -778,7 +786,7 @@ export default function Game() {
       // Примечание: переменная высота прыжка реализована через effectiveGravity выше
 
       // Увеличиваем дистанцию
-      distanceRef.current += 1;
+      distanceRef.current += 1 * frameScale;
       const levelScore = Math.floor(distanceRef.current / 10);
       const currentScore = baseScore + levelScore;
 
@@ -863,9 +871,9 @@ export default function Game() {
       
       // Обновление и рисование погодных частиц
       weatherParticlesRef.current = weatherParticlesRef.current.filter(p => {
-        p.y += p.vy;
+        p.y += p.vy * frameScale;
         if (p.vx !== undefined) {
-          p.x += p.vx;
+          p.x += p.vx * frameScale;
         }
         
         if (p.y > CANVAS_HEIGHT) return false;
@@ -1034,7 +1042,7 @@ export default function Game() {
 
       // Обновляем и рисуем препятствия
       obstaclesRef.current = obstaclesRef.current.filter(obs => {
-        obs.x -= obstacleSpeed;
+        obs.x -= obstacleSpeed * frameScale;
 
         if (obs.x < -obs.width) return false;
 
@@ -1063,22 +1071,25 @@ export default function Game() {
         ctx.lineWidth = 2;
         ctx.strokeRect(obs.x, obsY, obs.width, obs.height);
 
-        // Проверка столкновения
+        // Проверка столкновения: круг игрока vs прямоугольник препятствия
         const playerX = PLAYER_X_POSITION;
-        const playerBottom = playerYRef.current + PLAYER_SIZE;
-        const playerRight = playerX + PLAYER_SIZE;
-        const obsTop = CANVAS_HEIGHT - GROUND_HEIGHT - obs.height;
-        const obsBottom = CANVAS_HEIGHT - GROUND_HEIGHT;
+        const centerX = playerX + PLAYER_SIZE / 2;
+        const centerY = playerYRef.current + PLAYER_SIZE / 2;
+        const radius = PLAYER_SIZE * 0.45;
 
-        // Уменьшаем hitbox препятствий для более щедрой коллизии
-        const hitboxMargin = 8; // отступ для уменьшения hitbox
-        if (
-          now > invincibleUntilRef.current &&
-          playerRight > obs.x + hitboxMargin &&
-          playerX < obs.x + obs.width - hitboxMargin &&
-          playerBottom > obsTop + hitboxMargin &&
-          playerYRef.current < obsBottom - hitboxMargin
-        ) {
+        const hitboxMargin = 8;
+        const rx = obs.x + hitboxMargin;
+        const ry = CANVAS_HEIGHT - GROUND_HEIGHT - obs.height + hitboxMargin;
+        const rw = Math.max(0, obs.width - hitboxMargin * 2);
+        const rh = Math.max(0, obs.height - hitboxMargin * 2);
+
+        const nearestX = Math.max(rx, Math.min(centerX, rx + rw));
+        const nearestY = Math.max(ry, Math.min(centerY, ry + rh));
+        const dx = centerX - nearestX;
+        const dy = centerY - nearestY;
+        const intersects = dx * dx + dy * dy <= radius * radius;
+
+        if (now > invincibleUntilRef.current && intersects) {
           // Столкновение!
           createParticles(playerX + PLAYER_SIZE / 2, playerYRef.current + PLAYER_SIZE / 2, COLORS.player, 10); // уменьшено
           
@@ -1125,7 +1136,7 @@ export default function Game() {
 
       // Обновляем и рисуем звездочки
       starsRef.current = starsRef.current.filter(star => {
-        star.x -= obstacleSpeed;
+        star.x -= obstacleSpeed * frameScale;
 
         if (star.x < -20) return false;
 
@@ -1187,9 +1198,9 @@ export default function Game() {
 
       // Обновляем и рисуем частицы
       particlesRef.current = particlesRef.current.filter(p => {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vy += 0.3;
+        p.x += p.vx * frameScale;
+        p.y += p.vy * frameScale;
+        p.vy += 0.3 * frameScale;
         p.life -= 0.02;
 
         if (p.life <= 0) return false;

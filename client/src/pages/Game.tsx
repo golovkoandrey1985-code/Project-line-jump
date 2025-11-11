@@ -204,6 +204,13 @@ export default function Game() {
   }, [audio]);
   const { muted, setMuted, volume, setVolume, enableDoubleTap, enableVibration, setEnableDoubleTap, setEnableVibration } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
+  
+  // Сбрасываем показ настроек при смене состояния игры
+  useEffect(() => {
+    if (gameState !== 'playing' && gameState !== 'menu') {
+      setShowSettings(false);
+    }
+  }, [gameState]);
 
   // Delta-time
   const lastFrameTimeRef = useRef<number | null>(null);
@@ -1572,39 +1579,46 @@ export default function Game() {
       className="min-h-screen flex items-start justify-center bg-gradient-to-b from-gray-900 to-gray-800"
     >
       <div className="relative flex flex-col">
-        {/* Settings toggle - размещена под окном с очками */}
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            initializeAudio(); // Инициализируем аудио при клике
-            setShowSettings((s) => !s);
-          }}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onTouchStart={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onMouseUp={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onTouchEnd={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          className="absolute top-16 right-2 md:right-4 px-3 py-1 bg-white/10 text-white text-sm rounded-full hover:bg-white/20 transition-all z-50"
-          style={{ pointerEvents: 'auto' }}
-        >
-          ⚙️
-        </button>
+        {/* Settings toggle - размещена в правом верхнем углу, под окном с очками */}
+        {(gameState === 'playing' || gameState === 'menu') && (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              initializeAudio(); // Инициализируем аудио при клике
+              setShowSettings((prev) => !prev);
+            }}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onMouseUp={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            className="absolute top-20 right-2 md:right-4 px-3 py-1 bg-white/10 text-white text-sm rounded-full hover:bg-white/20 transition-all z-[100]"
+            style={{ pointerEvents: 'auto', position: 'absolute' }}
+          >
+            ⚙️
+          </button>
+        )}
 
         {/* Settings panel */}
-        {showSettings && (
-          <div className="absolute top-24 right-2 md:right-4 w-64 p-3 rounded-lg bg-gray-900/90 border border-white/10 z-50 space-y-3">
+        {showSettings && (gameState === 'playing' || gameState === 'menu') && (
+          <div 
+            className="absolute top-28 right-2 md:right-4 w-64 p-3 rounded-lg bg-gray-900/90 border border-white/10 z-[100] space-y-3"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between">
               <span className="text-sm text-white/80">Звук</span>
               <button
@@ -1674,6 +1688,7 @@ export default function Game() {
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
           className="border-4 border-cyan-500 rounded-lg shadow-2xl cursor-pointer"
+          style={{ pointerEvents: gameState === 'playing' ? 'auto' : 'none' }}
           onTouchStart={(e) => {
             // Проверяем, что клик не по кнопке - проверяем элемент под точкой касания
             const touch = e.touches[0];
@@ -1682,8 +1697,9 @@ export default function Game() {
               if (elementAtPoint) {
                 // Проверяем, является ли элемент кнопкой или находится внутри кнопки
                 const button = elementAtPoint.closest('button');
-                if (button || elementAtPoint.tagName === 'BUTTON') {
+                if (button || elementAtPoint.tagName === 'BUTTON' || elementAtPoint.closest('[role="button"]')) {
                   e.stopPropagation();
+                  e.preventDefault();
                   return;
                 }
               }
@@ -1720,8 +1736,9 @@ export default function Game() {
             if (elementAtPoint) {
               // Проверяем, является ли элемент кнопкой или находится внутри кнопки
               const button = elementAtPoint.closest('button');
-              if (button || elementAtPoint.tagName === 'BUTTON') {
+              if (button || elementAtPoint.tagName === 'BUTTON' || elementAtPoint.closest('[role="button"]')) {
                 e.stopPropagation();
+                e.preventDefault();
                 return;
               }
             }
@@ -1950,7 +1967,7 @@ export default function Game() {
           </div>
         )}
 
-        {/* Кнопка паузы - размещена по центру экрана */}
+        {/* Кнопка паузы - размещена справа от окна счета */}
         {gameState === 'playing' && (
           <button
             onClick={(e) => {
@@ -1975,8 +1992,8 @@ export default function Game() {
               e.preventDefault();
               e.stopPropagation();
             }}
-            className="absolute top-2 left-1/2 -translate-x-1/2 px-4 py-1 md:px-6 md:py-2 bg-cyan-500/20 text-cyan-400 text-sm md:text-base font-bold rounded-full hover:bg-cyan-500/30 transition-all z-50"
-            style={{ pointerEvents: 'auto' }}
+            className="absolute top-2 left-[180px] md:left-[200px] px-3 py-1 md:px-4 md:py-2 bg-cyan-500/20 text-cyan-400 text-xs md:text-sm font-bold rounded-full hover:bg-cyan-500/30 transition-all z-[100]"
+            style={{ pointerEvents: 'auto', position: 'absolute' }}
           >
             ⏸️ Пауза
           </button>

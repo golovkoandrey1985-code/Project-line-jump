@@ -30,6 +30,16 @@ const JUMP_BUFFER_MS = 150; // время, в течение которого н
 // UI/score throttling
 const SCORE_UPDATE_INTERVAL_MS = 150;
 
+// Dynamic difficulty tuning
+const DIFFICULTY_STEP_SCORE = 300; // каждые N очков усложняем чуть-чуть
+const SPEED_INC_PER_STEP = 0.06; // +6% к базовой скорости за шаг
+const SPAWN_DEC_MS_PER_STEP = 120; // уменьшаем интервал спауна в мс за шаг
+const MAX_SPEED_MULTIPLIER = 1.8;
+const MIN_SPAWN_INTERVAL_MS = 900;
+
+// Safe windows for high obstacles
+const SAFE_HIGH_GAP_PX = 260; // минимальная дистанция по X между высокими препятствиями
+
 // Препятствия (базовые настройки)
 const MIN_OBSTACLE_DISTANCE = 400; // увеличено с 300
 const INITIAL_DELAY = 2000; // задержка перед первым препятствием
@@ -185,6 +195,7 @@ export default function Game() {
   const lastMagnetScoreRef = useRef(0); // Последний счет когда был активирован магнит
   const consecutiveStarsRef = useRef(0); // Для щита
   const hasFallbackAirJumpRef = useRef(false); // Разрешает один доп. прыжок при падении, если второй тап не использован
+  const lastHighObstacleXRef = useRef(-Infinity); // Последняя позиция высокого препятствия для безопасных окон
 
   // Сброс игры
   const resetGame = (keepScore: boolean = false) => {
@@ -872,10 +883,15 @@ export default function Game() {
         return true;
       });
 
-      // Получаем конфигурацию текущего уровня
+      // Получаем конфигурацию текущего уровня + динамическая сложность
       const levelConfig = getLevelConfig(currentLevelId) || LEVELS[0];
-      const obstacleSpeed = levelConfig.obstacleSpeed;
-      const obstacleSpawnInterval = levelConfig.obstacleSpawnInterval;
+      const steps = Math.max(0, Math.floor(currentScore / DIFFICULTY_STEP_SCORE));
+      const speedMultiplier = Math.min(1 + steps * SPEED_INC_PER_STEP, MAX_SPEED_MULTIPLIER);
+      const obstacleSpeed = levelConfig.obstacleSpeed * speedMultiplier;
+      const obstacleSpawnInterval = Math.max(
+        MIN_SPAWN_INTERVAL_MS,
+        levelConfig.obstacleSpawnInterval - steps * SPAWN_DEC_MS_PER_STEP
+      );
 
       // Спаун препятствий с паттернами
       const timeSinceStart = distanceRef.current * (1000 / 60); // примерное время в мс
@@ -891,11 +907,13 @@ export default function Game() {
             if (patternRoll < 0.6) {
               // Одиночное препятствие
               const isHigh = Math.random() > 0.6;
+              const makeHigh = isHigh && (CANVAS_WIDTH - lastHighObstacleXRef.current >= SAFE_HIGH_GAP_PX);
               obstaclesRef.current.push({
                 x: CANVAS_WIDTH,
-                height: isHigh ? 70 : 35,
+                height: makeHigh ? 70 : 35,
                 width: 30,
               });
+              if (makeHigh) lastHighObstacleXRef.current = CANVAS_WIDTH;
             } else {
               // Парные низкие
               obstaclesRef.current.push(
@@ -908,36 +926,43 @@ export default function Game() {
             if (patternRoll < 0.3) {
               // Одиночное
               const isHigh = Math.random() > 0.5;
+              const makeHigh = isHigh && (CANVAS_WIDTH - lastHighObstacleXRef.current >= SAFE_HIGH_GAP_PX);
               obstaclesRef.current.push({
                 x: CANVAS_WIDTH,
-                height: isHigh ? 70 : 35,
+                height: makeHigh ? 70 : 35,
                 width: 30,
               });
+              if (makeHigh) lastHighObstacleXRef.current = CANVAS_WIDTH;
             } else if (patternRoll < 0.7) {
               // Парные (низкие или высокие)
               const isHigh = Math.random() > 0.5;
-              const height = isHigh ? 70 : 35;
+              const height = (isHigh && (CANVAS_WIDTH - lastHighObstacleXRef.current >= SAFE_HIGH_GAP_PX)) ? 70 : 35;
               obstaclesRef.current.push(
                 { x: CANVAS_WIDTH, height, width: 30 },
                 { x: CANVAS_WIDTH + 70, height, width: 30 }
               );
+              if (height === 70) lastHighObstacleXRef.current = CANVAS_WIDTH;
             } else {
               // Комбо: высокий + низкий
+              const allowHigh = (CANVAS_WIDTH - lastHighObstacleXRef.current >= SAFE_HIGH_GAP_PX);
               obstaclesRef.current.push(
-                { x: CANVAS_WIDTH, height: 70, width: 30 },
+                { x: CANVAS_WIDTH, height: allowHigh ? 70 : 35, width: 30 },
                 { x: CANVAS_WIDTH + 150, height: 35, width: 30 }
               );
+              if (allowHigh) lastHighObstacleXRef.current = CANVAS_WIDTH;
             }
           } else {
             // Уровень 3+: Все паттерны
             if (patternRoll < 0.15) {
               // Одиночное
               const isHigh = Math.random() > 0.5;
+              const makeHigh = isHigh && (CANVAS_WIDTH - lastHighObstacleXRef.current >= SAFE_HIGH_GAP_PX);
               obstaclesRef.current.push({
                 x: CANVAS_WIDTH,
-                height: isHigh ? 70 : 35,
+                height: makeHigh ? 70 : 35,
                 width: 30,
               });
+              if (makeHigh) lastHighObstacleXRef.current = CANVAS_WIDTH;
             } else if (patternRoll < 0.35) {
               // Парные низкие
               obstaclesRef.current.push(
@@ -946,10 +971,17 @@ export default function Game() {
               );
             } else if (patternRoll < 0.55) {
               // Два высоких на расстоянии (для тройного прыжка)
+              const allowFirst = (CANVAS_WIDTH - lastHighObstacleXRef.current >= SAFE_HIGH_GAP_PX);
+              const firstH = allowFirst ? 70 : 35;
+              // второй высокий только если первый тоже высокий и окно безопасно
+              const allowSecond = allowFirst && (CANVAS_WIDTH + 200 - (allowFirst ? CANVAS_WIDTH : lastHighObstacleXRef.current) >= SAFE_HIGH_GAP_PX);
+              const secondH = allowSecond ? 70 : 35;
               obstaclesRef.current.push(
-                { x: CANVAS_WIDTH, height: 70, width: 30 },
-                { x: CANVAS_WIDTH + 200, height: 70, width: 30 }
+                { x: CANVAS_WIDTH, height: firstH, width: 30 },
+                { x: CANVAS_WIDTH + 200, height: secondH, width: 30 }
               );
+              if (firstH === 70) lastHighObstacleXRef.current = CANVAS_WIDTH;
+              if (secondH === 70) lastHighObstacleXRef.current = CANVAS_WIDTH + 200;
             } else if (patternRoll < 0.70) {
               // Тройные низкие
               obstaclesRef.current.push(
@@ -959,17 +991,21 @@ export default function Game() {
               );
             } else if (patternRoll < 0.85) {
               // Пирамида: низкий-высокий-низкий
+              const allowMid = (CANVAS_WIDTH + 100 - lastHighObstacleXRef.current >= SAFE_HIGH_GAP_PX);
               obstaclesRef.current.push(
                 { x: CANVAS_WIDTH, height: 35, width: 30 },
-                { x: CANVAS_WIDTH + 100, height: 70, width: 30 },
+                { x: CANVAS_WIDTH + 100, height: allowMid ? 70 : 35, width: 30 },
                 { x: CANVAS_WIDTH + 200, height: 35, width: 30 }
               );
+              if (allowMid) lastHighObstacleXRef.current = CANVAS_WIDTH + 100;
             } else {
               // Комбо: высокий + низкий
+              const allowHigh = (CANVAS_WIDTH - lastHighObstacleXRef.current >= SAFE_HIGH_GAP_PX);
               obstaclesRef.current.push(
-                { x: CANVAS_WIDTH, height: 70, width: 30 },
+                { x: CANVAS_WIDTH, height: allowHigh ? 70 : 35, width: 30 },
                 { x: CANVAS_WIDTH + 150, height: 35, width: 30 }
               );
+              if (allowHigh) lastHighObstacleXRef.current = CANVAS_WIDTH;
             }
           }
           

@@ -3,6 +3,7 @@ import { getCurrentLevel, setCurrentLevel, getLevelConfig, unlockLevel, isLevelU
 import { useAudio } from '@/lib/audio';
 import { useSettings } from '@/contexts/SettingsContext';
 import { saveSession } from '@/lib/telemetry';
+import { vibrate, VIBRATION_PATTERNS } from '@/lib/vibration';
 
 // Константы для расчета размеров
 const getCanvasSize = () => {
@@ -183,7 +184,7 @@ export default function Game() {
 
   // Audio & settings
   const audio = useAudio();
-  const { muted, setMuted, volume, setVolume } = useSettings();
+  const { muted, setMuted, volume, setVolume, enableDoubleTap, enableVibration, setEnableDoubleTap, setEnableVibration } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
 
   // Delta-time
@@ -277,9 +278,10 @@ export default function Game() {
     // Запоминаем намерение прыгнуть (jump buffer)
     lastJumpPressedTimeRef.current = now;
 
-    // Логика для двойного тапа (высокий/тройной прыжок) — если окно активно
+    // Логика для двойного тапа (высокий/тройной прыжок) — если окно активно и включено в настройках
     const timeSinceLastTap = now - lastTapTimeRef.current;
     if (
+      enableDoubleTap &&
       waitingForSecondTapRef.current &&
       timeSinceLastTap >= MIN_DOUBLE_TAP_INTERVAL &&
       timeSinceLastTap <= DOUBLE_TAP_THRESHOLD
@@ -288,6 +290,7 @@ export default function Game() {
       playerVelocityYRef.current = jumpPower;
       isJumpingRef.current = true;
       audio.jump();
+      vibrate(VIBRATION_PATTERNS.jump, enableVibration);
       setShowDoubleTapIndicator(false);
 
       if (hasTripleJump) {
@@ -778,14 +781,18 @@ export default function Game() {
           playerVelocityYRef.current = JUMP_POWER;
           isJumpingRef.current = true;
           createParticles(PLAYER_X_POSITION, playerYRef.current + PLAYER_SIZE, COLORS.player, 5);
+          audio.jump();
+          vibrate(VIBRATION_PATTERNS.jump, enableVibration);
 
-          // Активируем окно второго тапа
-          waitingForSecondTapRef.current = true;
-          setShowDoubleTapIndicator(true);
-          setTimeout(() => {
-            waitingForSecondTapRef.current = false;
-            setShowDoubleTapIndicator(false);
-          }, DOUBLE_TAP_THRESHOLD);
+          // Активируем окно второго тапа только если включено в настройках
+          if (enableDoubleTap) {
+            waitingForSecondTapRef.current = true;
+            setShowDoubleTapIndicator(true);
+            setTimeout(() => {
+              waitingForSecondTapRef.current = false;
+              setShowDoubleTapIndicator(false);
+            }, DOUBLE_TAP_THRESHOLD);
+          }
 
           // Погасить буфер
           lastJumpPressedTimeRef.current = null;
@@ -836,6 +843,7 @@ export default function Game() {
           unlockLevel(nextLevelId);
         }
         audio.levelComplete();
+        vibrate(VIBRATION_PATTERNS.levelComplete, enableVibration);
         
         // Обновляем Career Score только если ещё не начисляли (предотвращаем двойной учёт)
         if (!careerScoreAwardedRef.current) {
@@ -1137,6 +1145,7 @@ export default function Game() {
           setLives(newLives);
           invincibleUntilRef.current = now + 1000;
           audio.hit();
+          vibrate(VIBRATION_PATTERNS.hit, enableVibration);
 
           // Отключаем все активные способности при получении урона
           if (hasMagnet) {
@@ -1159,6 +1168,7 @@ export default function Game() {
           } else if (newLives <= 0) {
             setGameState('gameOver');
             audio.gameOver();
+            vibrate(VIBRATION_PATTERNS.gameOver, enableVibration);
             
             // Обновляем Career Score только если ещё не начисляли (предотвращаем двойной учёт)
             if (!careerScoreAwardedRef.current) {
@@ -1236,6 +1246,7 @@ export default function Game() {
         if (distance < (PLAYER_SIZE + collectRadius) / 2) {
           createParticles(star.x, star.y, COLORS.star, 12);
           audio.star();
+          vibrate(VIBRATION_PATTERNS.star, enableVibration);
           starsCollectedRef.current += 1; // Увеличиваем счётчик собранных звёзд
           
           // Если жизни на максимуме, конвертируем в бонусы
@@ -1586,6 +1597,28 @@ export default function Game() {
                 className="w-full accent-cyan-400"
               />
             </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-white/80">Двойной тап</span>
+              <button
+                onClick={() => setEnableDoubleTap(!enableDoubleTap)}
+                className={`px-2 py-1 rounded text-white text-xs transition-colors ${
+                  enableDoubleTap ? 'bg-cyan-500 hover:bg-cyan-600' : 'bg-gray-800 hover:bg-gray-700'
+                }`}
+              >
+                {enableDoubleTap ? 'Вкл' : 'Выкл'}
+              </button>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-white/80">Вибрация</span>
+              <button
+                onClick={() => setEnableVibration(!enableVibration)}
+                className={`px-2 py-1 rounded text-white text-xs transition-colors ${
+                  enableVibration ? 'bg-cyan-500 hover:bg-cyan-600' : 'bg-gray-800 hover:bg-gray-700'
+                }`}
+              >
+                {enableVibration ? 'Вкл' : 'Выкл'}
+              </button>
+            </div>
           </div>
         )}
         <canvas
@@ -1616,9 +1649,31 @@ export default function Game() {
           style={{ touchAction: 'none' }}
         />
         
-        {/* Визуальная область для тапов */}
+        {/* Экранные кнопки управления для мобильных (только на маленьких экранах) */}
         {gameState === 'playing' && (
-          <div className="w-full h-[10vh] bg-gradient-to-t from-cyan-500/30 to-transparent border-t-2 border-cyan-500/50 flex items-center justify-center">
+          <div className="md:hidden w-full flex justify-center gap-4 py-2 bg-gradient-to-t from-cyan-500/20 to-transparent">
+            <button
+              onTouchStart={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handlePressDown();
+              }}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handlePressUp();
+              }}
+              className="px-8 py-4 bg-cyan-500/80 text-white text-lg font-bold rounded-full active:bg-cyan-600/90 touch-none"
+              style={{ touchAction: 'none' }}
+            >
+              ПРЫЖОК
+            </button>
+          </div>
+        )}
+        
+        {/* Визуальная область для тапов (скрыта на мобильных, если есть кнопки) */}
+        {gameState === 'playing' && (
+          <div className="hidden md:flex w-full h-[10vh] bg-gradient-to-t from-cyan-500/30 to-transparent border-t-2 border-cyan-500/50 items-center justify-center">
             <div className="text-cyan-300/60 text-sm md:text-base font-semibold animate-pulse">
               👆 TAP TO JUMP
             </div>

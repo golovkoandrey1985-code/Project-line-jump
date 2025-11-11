@@ -3,8 +3,12 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 type Settings = {
   muted: boolean;
   volume: number; // 0..1
+  enableDoubleTap: boolean;
+  enableVibration: boolean;
   setMuted: (m: boolean) => void;
   setVolume: (v: number) => void;
+  setEnableDoubleTap: (e: boolean) => void;
+  setEnableVibration: (e: boolean) => void;
 };
 
 const SettingsContext = createContext<Settings | null>(null);
@@ -31,21 +35,43 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       return 0.7;
     }
   });
+  const [enableDoubleTap, setEnableDoubleTap] = useState<boolean>(() => {
+    try {
+      const s = localStorage.getItem(KEY);
+      if (!s) return true;
+      return JSON.parse(s).enableDoubleTap ?? true;
+    } catch {
+      return true;
+    }
+  });
+  const [enableVibration, setEnableVibration] = useState<boolean>(() => {
+    try {
+      const s = localStorage.getItem(KEY);
+      if (!s) return true;
+      return JSON.parse(s).enableVibration ?? true;
+    } catch {
+      return true;
+    }
+  });
 
   useEffect(() => {
     try {
-      localStorage.setItem(KEY, JSON.stringify({ muted, volume }));
+      localStorage.setItem(KEY, JSON.stringify({ muted, volume, enableDoubleTap, enableVibration }));
     } catch {}
-  }, [muted, volume]);
+  }, [muted, volume, enableDoubleTap, enableVibration]);
 
   const value = useMemo(
     () => ({
       muted,
       volume,
+      enableDoubleTap,
+      enableVibration,
       setMuted,
       setVolume,
+      setEnableDoubleTap,
+      setEnableVibration,
     }),
-    [muted, volume]
+    [muted, volume, enableDoubleTap, enableVibration]
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;

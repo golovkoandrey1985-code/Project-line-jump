@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { getCurrentLevel, setCurrentLevel, getLevelConfig, unlockLevel, isLevelUnlocked, LEVELS } from '../levels';
 import { useAudio } from '@/lib/audio';
-import { useSettings } from '@/contexts/SettingsContext';
 import { saveSession } from '@/lib/telemetry';
 import { vibrate, VIBRATION_PATTERNS } from '@/lib/vibration';
 
@@ -191,7 +190,7 @@ export default function Game() {
   const lastScoreUpdateTimeRef = useRef(0);
 
   // Audio & settings
-  const audio = useAudio();
+  const audio = useAudio(muted, volume);
   const audioInitializedRef = useRef(false);
   
   // Инициализируем аудио при первом взаимодействии пользователя
@@ -202,7 +201,52 @@ export default function Game() {
       audio.jump();
     }
   }, [audio]);
-  const { muted, setMuted, volume, setVolume, enableDoubleTap, enableVibration, setEnableDoubleTap, setEnableVibration } = useSettings();
+  // Настройки игры (локальное состояние вместо контекста)
+  const SETTINGS_KEY = 'lineJumpSettings';
+  const [muted, setMuted] = useState<boolean>(() => {
+    try {
+      const s = localStorage.getItem(SETTINGS_KEY);
+      if (!s) return false;
+      return JSON.parse(s).muted ?? false;
+    } catch {
+      return false;
+    }
+  });
+  const [volume, setVolume] = useState<number>(() => {
+    try {
+      const s = localStorage.getItem(SETTINGS_KEY);
+      if (!s) return 0.7;
+      const v = JSON.parse(s).volume;
+      return typeof v === 'number' ? v : 0.7;
+    } catch {
+      return 0.7;
+    }
+  });
+  const [enableDoubleTap, setEnableDoubleTap] = useState<boolean>(() => {
+    try {
+      const s = localStorage.getItem(SETTINGS_KEY);
+      if (!s) return true;
+      return JSON.parse(s).enableDoubleTap ?? true;
+    } catch {
+      return true;
+    }
+  });
+  const [enableVibration, setEnableVibration] = useState<boolean>(() => {
+    try {
+      const s = localStorage.getItem(SETTINGS_KEY);
+      if (!s) return true;
+      return JSON.parse(s).enableVibration ?? true;
+    } catch {
+      return true;
+    }
+  });
+
+  // Сохраняем настройки в localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ muted, volume, enableDoubleTap, enableVibration }));
+    } catch {}
+  }, [muted, volume, enableDoubleTap, enableVibration]);
   const [showSettings, setShowSettings] = useState(false);
   
   // Сбрасываем показ настроек при смене состояния игры (кроме menu и playing)

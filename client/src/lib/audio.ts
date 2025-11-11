@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { useSettings } from '@/contexts/SettingsContext';
 
 function playTone(ctx: AudioContext, freq: number, durationMs: number, volume: number, type: OscillatorType = 'sine') {
   const osc = ctx.createOscillator();
@@ -16,8 +15,7 @@ function playTone(ctx: AudioContext, freq: number, durationMs: number, volume: n
   }, durationMs);
 }
 
-export function useAudio() {
-  const { muted, volume } = useSettings();
+export function useAudio(muted: boolean = false, volume: number = 0.7) {
 
   const api = useMemo(() => {
     let ctx: AudioContext | null = null;

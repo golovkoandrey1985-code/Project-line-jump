@@ -6,7 +6,6 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Landing from "./pages/Landing";
 import Game from "./pages/Game";
-import { SettingsProvider } from "./contexts/SettingsContext";
 
 function Router() {
   return (
@@ -28,17 +27,15 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <SettingsProvider>
-        <ThemeProvider
-          defaultTheme="dark"
-          // switchable
-        >
-          <TooltipProvider>
-            <Toaster />
-            <Router />
-          </TooltipProvider>
-        </ThemeProvider>
-      </SettingsProvider>
+      <ThemeProvider
+        defaultTheme="dark"
+        // switchable
+      >
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { getCurrentLevel, setCurrentLevel, getLevelConfig, unlockLevel, isLevelUnlocked, LEVELS } from '../levels';
 import { useAudio } from '@/lib/audio';
 import { useSettings } from '@/contexts/SettingsContext';
+import { saveSession } from '@/lib/telemetry';
 
 // Константы для расчета размеров
 const getCanvasSize = () => {
@@ -206,6 +207,11 @@ export default function Game() {
   const consecutiveStarsRef = useRef(0); // Для щита
   const hasFallbackAirJumpRef = useRef(false); // Разрешает один доп. прыжок при падении, если второй тап не использован
   const lastHighObstacleXRef = useRef(-Infinity); // Последняя позиция высокого препятствия для безопасных окон
+  
+  // Телеметрия и предотвращение двойного начисления Career Score
+  const careerScoreAwardedRef = useRef(false); // Флаг, чтобы не начислять Career Score дважды
+  const obstaclesPassedRef = useRef(0); // Счётчик пройденных препятствий
+  const starsCollectedRef = useRef(0); // Счётчик собранных звёзд
 
   // Сброс игры
   const resetGame = (keepScore: boolean = false) => {
@@ -230,6 +236,9 @@ export default function Game() {
     magnetEndTimeRef.current = 0;
     consecutiveStarsRef.current = 0;
     hasFallbackAirJumpRef.current = false;
+    careerScoreAwardedRef.current = false;
+    obstaclesPassedRef.current = 0;
+    starsCollectedRef.current = 0;
     if (!keepScore) {
       setScore(0);
       setBaseScore(0);
@@ -828,11 +837,26 @@ export default function Game() {
         }
         audio.levelComplete();
         
-        // Обновляем Career Score (НЕ обнуляем score!)
-        const newCareerScore = careerScore + currentScore;
-        console.log('Level Complete! Career Score:', careerScore, '+ Level Score:', currentScore, '= New Career Score:', newCareerScore);
-        setCareerScore(newCareerScore);
-        localStorage.setItem('lineJumpCareerScore', newCareerScore.toString());
+        // Обновляем Career Score только если ещё не начисляли (предотвращаем двойной учёт)
+        if (!careerScoreAwardedRef.current) {
+          const newCareerScore = careerScore + currentScore;
+          console.log('Level Complete! Career Score:', careerScore, '+ Level Score:', currentScore, '= New Career Score:', newCareerScore);
+          setCareerScore(newCareerScore);
+          localStorage.setItem('lineJumpCareerScore', newCareerScore.toString());
+          careerScoreAwardedRef.current = true;
+        }
+        
+        // Сохраняем телеметрию
+        saveSession({
+          timestamp: Date.now(),
+          score: currentScore,
+          distance: distanceRef.current,
+          level: currentLevelId,
+          reason: 'levelComplete',
+          livesAtEnd: lives,
+          obstaclesPassed: obstaclesPassedRef.current,
+          starsCollected: starsCollectedRef.current,
+        });
         
         setGameState('levelComplete');
         return;
@@ -1056,7 +1080,11 @@ export default function Game() {
       obstaclesRef.current = obstaclesRef.current.filter(obs => {
         obs.x -= obstacleSpeed * frameScale;
 
-        if (obs.x < -obs.width) return false;
+        if (obs.x < -obs.width) {
+          // Препятствие пройдено - увеличиваем счётчик
+          obstaclesPassedRef.current += 1;
+          return false;
+        }
 
         // Рисуем препятствие с градиентом
         const isHighObstacle = obs.height > 60;
@@ -1130,16 +1158,32 @@ export default function Game() {
             setLives(lives);
           } else if (newLives <= 0) {
             setGameState('gameOver');
+            audio.gameOver();
             
-            // Обновляем Career Score
-            const newCareerScore = careerScore + score;
-            setCareerScore(newCareerScore);
-            localStorage.setItem('lineJumpCareerScore', newCareerScore.toString());
+            // Обновляем Career Score только если ещё не начисляли (предотвращаем двойной учёт)
+            if (!careerScoreAwardedRef.current) {
+              const newCareerScore = careerScore + score;
+              setCareerScore(newCareerScore);
+              localStorage.setItem('lineJumpCareerScore', newCareerScore.toString());
+              careerScoreAwardedRef.current = true;
+            }
             
             if (score > highScore) {
               setHighScore(score);
               localStorage.setItem('lineJumpHighScore', score.toString());
             }
+            
+            // Сохраняем телеметрию
+            saveSession({
+              timestamp: Date.now(),
+              score: score,
+              distance: distanceRef.current,
+              level: currentLevelId,
+              reason: 'gameOver',
+              livesAtEnd: 0,
+              obstaclesPassed: obstaclesPassedRef.current,
+              starsCollected: starsCollectedRef.current,
+            });
           }
         }
 
@@ -1192,6 +1236,7 @@ export default function Game() {
         if (distance < (PLAYER_SIZE + collectRadius) / 2) {
           createParticles(star.x, star.y, COLORS.star, 12);
           audio.star();
+          starsCollectedRef.current += 1; // Увеличиваем счётчик собранных звёзд
           
           // Если жизни на максимуме, конвертируем в бонусы
           if (lives >= MAX_LIVES) {

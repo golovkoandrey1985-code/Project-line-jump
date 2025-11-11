@@ -1605,7 +1605,7 @@ export default function Game() {
               e.stopPropagation();
             }}
             className="absolute top-2 right-2 md:right-4 px-3 py-1 bg-white/10 text-white text-sm rounded-full hover:bg-white/20 transition-all z-[100]"
-            style={{ pointerEvents: 'auto', position: 'absolute' }}
+            style={{ pointerEvents: 'auto', position: 'absolute', touchAction: 'manipulation' }}
           >
             ⚙️
           </button>
@@ -1698,13 +1698,24 @@ export default function Game() {
                 // Проверяем, является ли элемент кнопкой или находится внутри кнопки
                 const button = elementAtPoint.closest('button');
                 if (button || elementAtPoint.tagName === 'BUTTON' || elementAtPoint.closest('[role="button"]')) {
+                  // Это клик по кнопке - не обрабатываем как прыжок
+                  e.stopPropagation();
+                  e.preventDefault();
+                  return;
+                }
+                // Проверяем, не находится ли элемент внутри панели настроек
+                if (elementAtPoint.closest('.bg-gray-900\\/90')) {
                   e.stopPropagation();
                   e.preventDefault();
                   return;
                 }
               }
             }
-            if ((e.target as HTMLElement).closest('button')) {
+            // Дополнительная проверка через target
+            const target = e.target as HTMLElement;
+            if (target && (target.closest('button') || target.tagName === 'BUTTON')) {
+              e.stopPropagation();
+              e.preventDefault();
               return;
             }
             if (gameState === 'playing') {
@@ -1737,12 +1748,23 @@ export default function Game() {
               // Проверяем, является ли элемент кнопкой или находится внутри кнопки
               const button = elementAtPoint.closest('button');
               if (button || elementAtPoint.tagName === 'BUTTON' || elementAtPoint.closest('[role="button"]')) {
+                // Это клик по кнопке - не обрабатываем как прыжок
+                e.stopPropagation();
+                e.preventDefault();
+                return;
+              }
+              // Проверяем, не находится ли элемент внутри панели настроек
+              if (elementAtPoint.closest('.bg-gray-900\\/90')) {
                 e.stopPropagation();
                 e.preventDefault();
                 return;
               }
             }
-            if ((e.target as HTMLElement).closest('button')) {
+            // Дополнительная проверка через target
+            const target = e.target as HTMLElement;
+            if (target && (target.closest('button') || target.tagName === 'BUTTON')) {
+              e.stopPropagation();
+              e.preventDefault();
               return;
             }
             if (gameState === 'playing') {
@@ -1993,7 +2015,7 @@ export default function Game() {
               e.stopPropagation();
             }}
             className="absolute top-2 left-[100px] md:left-[120px] px-2 py-1 md:px-3 md:py-1.5 bg-cyan-500/20 text-cyan-400 text-xs md:text-sm font-bold rounded-full hover:bg-cyan-500/30 transition-all z-[100]"
-            style={{ pointerEvents: 'auto', position: 'absolute' }}
+            style={{ pointerEvents: 'auto', position: 'absolute', touchAction: 'manipulation' }}
           >
             ⏸️ Пауза
           </button>

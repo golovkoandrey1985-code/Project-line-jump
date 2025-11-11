@@ -21,40 +21,81 @@ export function useAudio() {
 
   const api = useMemo(() => {
     let ctx: AudioContext | null = null;
-    const ensure = () => {
-      if (!ctx) ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    let isResumed = false;
+    const ensure = async () => {
+      if (!ctx) {
+        try {
+          ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          // Пробуем возобновить контекст (может быть в suspended состоянии)
+          if (ctx.state === 'suspended') {
+            try {
+              await ctx.resume();
+              isResumed = true;
+            } catch (e) {
+              console.warn('AudioContext resume failed:', e);
+            }
+          } else {
+            isResumed = true;
+          }
+        } catch (e) {
+          console.warn('AudioContext creation failed:', e);
+          return null;
+        }
+      } else if (ctx.state === 'suspended' && !isResumed) {
+        try {
+          await ctx.resume();
+          isResumed = true;
+        } catch (e) {
+          console.warn('AudioContext resume failed:', e);
+        }
+      }
       return ctx;
     };
     return {
       jump() {
         if (muted) return;
-        const c = ensure();
-        playTone(c, 440, 90, volume * 0.25, 'square');
-        playTone(c, 660, 60, volume * 0.15, 'sine');
+        ensure().then(c => {
+          if (c) {
+            playTone(c, 440, 90, volume * 0.25, 'square');
+            playTone(c, 660, 60, volume * 0.15, 'sine');
+          }
+        }).catch(() => {});
       },
       star() {
         if (muted) return;
-        const c = ensure();
-        playTone(c, 880, 80, volume * 0.2, 'triangle');
-        setTimeout(() => playTone(c, 1320, 80, volume * 0.18, 'triangle'), 60);
+        ensure().then(c => {
+          if (c) {
+            playTone(c, 880, 80, volume * 0.2, 'triangle');
+            setTimeout(() => playTone(c, 1320, 80, volume * 0.18, 'triangle'), 60);
+          }
+        }).catch(() => {});
       },
       hit() {
         if (muted) return;
-        const c = ensure();
-        playTone(c, 160, 120, volume * 0.3, 'sawtooth');
+        ensure().then(c => {
+          if (c) {
+            playTone(c, 160, 120, volume * 0.3, 'sawtooth');
+          }
+        }).catch(() => {});
       },
       levelComplete() {
         if (muted) return;
-        const c = ensure();
-        playTone(c, 523.25, 120, volume * 0.22, 'sine'); // C5
-        setTimeout(() => playTone(c, 659.25, 120, volume * 0.22, 'sine'), 120); // E5
-        setTimeout(() => playTone(c, 783.99, 160, volume * 0.22, 'sine'), 240); // G5
+        ensure().then(c => {
+          if (c) {
+            playTone(c, 523.25, 120, volume * 0.22, 'sine'); // C5
+            setTimeout(() => playTone(c, 659.25, 120, volume * 0.22, 'sine'), 120); // E5
+            setTimeout(() => playTone(c, 783.99, 160, volume * 0.22, 'sine'), 240); // G5
+          }
+        }).catch(() => {});
       },
       gameOver() {
         if (muted) return;
-        const c = ensure();
-        playTone(c, 392, 180, volume * 0.2, 'triangle');
-        setTimeout(() => playTone(c, 261.63, 240, volume * 0.2, 'triangle'), 150);
+        ensure().then(c => {
+          if (c) {
+            playTone(c, 392, 180, volume * 0.2, 'triangle');
+            setTimeout(() => playTone(c, 261.63, 240, volume * 0.2, 'triangle'), 150);
+          }
+        }).catch(() => {});
       },
     };
   }, [muted, volume]);

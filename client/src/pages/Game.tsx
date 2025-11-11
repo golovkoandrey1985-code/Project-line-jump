@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { getCurrentLevel, setCurrentLevel, getLevelConfig, unlockLevel, isLevelUnlocked, LEVELS } from '../levels';
 import { useAudio } from '@/lib/audio';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -152,6 +152,14 @@ export default function Game() {
     const saved = localStorage.getItem('lineJumpCareerScore');
     return saved ? parseInt(saved) : 0;
   });
+  const baseCareerScoreRef = useRef(0); // Базовый Career Score в начале текущей сессии игры
+  
+  // Инициализируем baseCareerScoreRef при первом рендере
+  useEffect(() => {
+    if (baseCareerScoreRef.current === 0) {
+      baseCareerScoreRef.current = careerScore;
+    }
+  }, [careerScore]);
 
   // Игровые переменные
   const playerYRef = useRef(CANVAS_HEIGHT - GROUND_HEIGHT - PLAYER_SIZE);
@@ -184,6 +192,16 @@ export default function Game() {
 
   // Audio & settings
   const audio = useAudio();
+  const audioInitializedRef = useRef(false);
+  
+  // Инициализируем аудио при первом взаимодействии пользователя
+  const initializeAudio = useCallback(() => {
+    if (!audioInitializedRef.current) {
+      audioInitializedRef.current = true;
+      // Пробуем проиграть тихий звук для инициализации AudioContext
+      audio.jump();
+    }
+  }, [audio]);
   const { muted, setMuted, volume, setVolume, enableDoubleTap, enableVibration, setEnableDoubleTap, setEnableVibration } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
 
@@ -243,9 +261,13 @@ export default function Game() {
     if (!keepScore) {
       setScore(0);
       setBaseScore(0);
+      // При новом старте игры обновляем базовый Career Score
+      baseCareerScoreRef.current = careerScore;
     } else {
       // Сохраняем текущий score как baseScore
       setBaseScore(score);
+      // Обновляем базовый Career Score при переходе на следующий уровень
+      baseCareerScoreRef.current = careerScore;
     }
     setLives(INITIAL_LIVES);
   };
@@ -269,6 +291,7 @@ export default function Game() {
   // Обработка нажатия/отпускания (унифицированный ввод)
   const handlePressDown = () => {
     if (gameState !== 'playing') return;
+    initializeAudio(); // Инициализируем аудио при первом взаимодействии
     isInputDownRef.current = true;
 
     const now = Date.now();
@@ -824,6 +847,13 @@ export default function Game() {
       if (now - lastScoreUpdateTimeRef.current >= SCORE_UPDATE_INTERVAL_MS || lastScoreUpdateTimeRef.current === 0) {
         setScore(currentScore);
         lastScoreUpdateTimeRef.current = now;
+        
+        // Обновляем Career Score накопительно (базовый + текущий score)
+        const newCareerScore = baseCareerScoreRef.current + currentScore;
+        if (newCareerScore !== careerScore) {
+          setCareerScore(newCareerScore);
+          localStorage.setItem('lineJumpCareerScore', newCareerScore.toString());
+        }
       }
       
       // Проверяем получение способностей (повторяющиеся каждые N очков)
@@ -859,14 +889,8 @@ export default function Game() {
         audio.levelComplete();
         vibrate(VIBRATION_PATTERNS.levelComplete, enableVibration);
         
-        // Обновляем Career Score только если ещё не начисляли (предотвращаем двойной учёт)
-        if (!careerScoreAwardedRef.current) {
-          const newCareerScore = careerScore + currentScore;
-          console.log('Level Complete! Career Score:', careerScore, '+ Level Score:', currentScore, '= New Career Score:', newCareerScore);
-          setCareerScore(newCareerScore);
-          localStorage.setItem('lineJumpCareerScore', newCareerScore.toString());
-          careerScoreAwardedRef.current = true;
-        }
+        // Career Score уже обновляется накопительно в gameLoop, здесь только логируем
+        console.log('Level Complete! Career Score:', careerScore);
         
         // Сохраняем телеметрию
         saveSession({
@@ -969,7 +993,7 @@ export default function Game() {
           if (currentLevelId === 1) {
             // Уровень 1: Одиночные (60%) и парные (40%)
             if (patternRoll < 0.6) {
-              // Одиночное препятствие
+              // Одиночное препятствие - увеличиваем вероятность высоких (40% вместо 30%)
               const isHigh = Math.random() > 0.6;
               const makeHigh = isHigh && (CANVAS_WIDTH - lastHighObstacleXRef.current >= SAFE_HIGH_GAP_PX);
               obstaclesRef.current.push({
@@ -1184,13 +1208,8 @@ export default function Game() {
             audio.gameOver();
             vibrate(VIBRATION_PATTERNS.gameOver, enableVibration);
             
-            // Обновляем Career Score только если ещё не начисляли (предотвращаем двойной учёт)
-            if (!careerScoreAwardedRef.current) {
-              const newCareerScore = careerScore + score;
-              setCareerScore(newCareerScore);
-              localStorage.setItem('lineJumpCareerScore', newCareerScore.toString());
-              careerScoreAwardedRef.current = true;
-            }
+            // Career Score уже обновляется накопительно в gameLoop, здесь только логируем
+            console.log('Game Over! Final Career Score:', careerScore);
             
             if (score > highScore) {
               setHighScore(score);
@@ -1551,49 +1570,48 @@ export default function Game() {
   return (
     <div 
       className="min-h-screen flex items-start justify-center bg-gradient-to-b from-gray-900 to-gray-800"
-      onTouchStart={(e) => {
-        if (gameState === 'playing') {
-          e.preventDefault();
-          handlePressDown();
-        }
-      }}
-      onTouchEnd={(e) => {
-        if (gameState === 'playing') {
-          e.preventDefault();
-          handlePressUp();
-        }
-      }}
-      onMouseDown={() => {
-        if (gameState === 'playing') {
-          handlePressDown();
-        }
-      }}
-      onMouseUp={() => {
-        if (gameState === 'playing') {
-          handlePressUp();
-        }
-      }}
-      style={{ touchAction: 'none' }}
     >
       <div className="relative flex flex-col">
-        {/* Settings toggle */}
+        {/* Settings toggle - размещена под окном с очками */}
         <button
           onClick={(e) => {
+            e.preventDefault();
             e.stopPropagation();
+            initializeAudio(); // Инициализируем аудио при клике
             setShowSettings((s) => !s);
           }}
-          className="absolute top-2 right-2 md:right-4 px-3 py-1 bg-white/10 text-white text-sm rounded-full hover:bg-white/20 transition-all z-20"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onMouseUp={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          className="absolute top-16 right-2 md:right-4 px-3 py-1 bg-white/10 text-white text-sm rounded-full hover:bg-white/20 transition-all z-50"
+          style={{ pointerEvents: 'auto' }}
         >
           ⚙️
         </button>
 
         {/* Settings panel */}
         {showSettings && (
-          <div className="absolute top-10 right-2 md:right-4 w-64 p-3 rounded-lg bg-gray-900/90 border border-white/10 z-20 space-y-3">
+          <div className="absolute top-24 right-2 md:right-4 w-64 p-3 rounded-lg bg-gray-900/90 border border-white/10 z-50 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-white/80">Звук</span>
               <button
-                onClick={() => setMuted(!muted)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMuted(!muted);
+                }}
                 className="px-2 py-1 rounded bg-gray-800 text-white text-xs hover:bg-gray-700"
               >
                 {muted ? 'Включить' : 'Выключить'}
@@ -1607,14 +1625,24 @@ export default function Game() {
                 max={1}
                 step={0.01}
                 value={volume}
-                onChange={(e) => setVolume(parseFloat(e.target.value))}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  setVolume(parseFloat(e.target.value));
+                }}
+                onClick={(e) => e.stopPropagation()}
                 className="w-full accent-cyan-400"
               />
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-white/80">Двойной тап</span>
+              <div className="flex flex-col">
+                <span className="text-sm text-white/80">Двойной тап</span>
+                <span className="text-xs text-white/50">Высокий прыжок</span>
+              </div>
               <button
-                onClick={() => setEnableDoubleTap(!enableDoubleTap)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEnableDoubleTap(!enableDoubleTap);
+                }}
                 className={`px-2 py-1 rounded text-white text-xs transition-colors ${
                   enableDoubleTap ? 'bg-cyan-500 hover:bg-cyan-600' : 'bg-gray-800 hover:bg-gray-700'
                 }`}
@@ -1623,9 +1651,15 @@ export default function Game() {
               </button>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-white/80">Вибрация</span>
+              <div className="flex flex-col">
+                <span className="text-sm text-white/80">Вибрация</span>
+                <span className="text-xs text-white/50">Тактильная отдача</span>
+              </div>
               <button
-                onClick={() => setEnableVibration(!enableVibration)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEnableVibration(!enableVibration);
+                }}
                 className={`px-2 py-1 rounded text-white text-xs transition-colors ${
                   enableVibration ? 'bg-cyan-500 hover:bg-cyan-600' : 'bg-gray-800 hover:bg-gray-700'
                 }`}
@@ -1641,24 +1675,78 @@ export default function Game() {
           height={CANVAS_HEIGHT}
           className="border-4 border-cyan-500 rounded-lg shadow-2xl cursor-pointer"
           onTouchStart={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handlePressDown();
+            // Проверяем, что клик не по кнопке - проверяем элемент под точкой касания
+            const touch = e.touches[0];
+            if (touch) {
+              const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
+              if (elementAtPoint) {
+                // Проверяем, является ли элемент кнопкой или находится внутри кнопки
+                const button = elementAtPoint.closest('button');
+                if (button || elementAtPoint.tagName === 'BUTTON') {
+                  e.stopPropagation();
+                  return;
+                }
+              }
+            }
+            if ((e.target as HTMLElement).closest('button')) {
+              return;
+            }
+            if (gameState === 'playing') {
+              e.preventDefault();
+              e.stopPropagation();
+              handlePressDown();
+            }
           }}
           onTouchEnd={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handlePressUp();
+            const touch = e.changedTouches[0];
+            if (touch) {
+              const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
+              if (elementAtPoint && (elementAtPoint.closest('button') || elementAtPoint.tagName === 'BUTTON')) {
+                return;
+              }
+            }
+            if ((e.target as HTMLElement).closest('button')) {
+              return;
+            }
+            if (gameState === 'playing') {
+              e.preventDefault();
+              e.stopPropagation();
+              handlePressUp();
+            }
           }}
           onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handlePressDown();
+            // Проверяем элемент под курсором
+            const elementAtPoint = document.elementFromPoint(e.clientX, e.clientY);
+            if (elementAtPoint) {
+              // Проверяем, является ли элемент кнопкой или находится внутри кнопки
+              const button = elementAtPoint.closest('button');
+              if (button || elementAtPoint.tagName === 'BUTTON') {
+                e.stopPropagation();
+                return;
+              }
+            }
+            if ((e.target as HTMLElement).closest('button')) {
+              return;
+            }
+            if (gameState === 'playing') {
+              e.preventDefault();
+              e.stopPropagation();
+              handlePressDown();
+            }
           }}
           onMouseUp={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handlePressUp();
+            const elementAtPoint = document.elementFromPoint(e.clientX, e.clientY);
+            if (elementAtPoint && (elementAtPoint.closest('button') || elementAtPoint.tagName === 'BUTTON')) {
+              return;
+            }
+            if ((e.target as HTMLElement).closest('button')) {
+              return;
+            }
+            if (gameState === 'playing') {
+              e.preventDefault();
+              e.stopPropagation();
+              handlePressUp();
+            }
           }}
           style={{ touchAction: 'none' }}
         />
@@ -1730,13 +1818,19 @@ export default function Game() {
             <h2 className="text-3xl md:text-5xl font-bold text-cyan-400 mb-4">Пауза</h2>
             <div className="flex gap-2 px-4">
               <button
-                onClick={() => setGameState('playing')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setGameState('playing');
+                }}
                 className="px-4 py-2 md:px-8 md:py-3 bg-green-500 text-white text-sm md:text-xl font-bold rounded-full hover:bg-green-400 transition-all"
               >
                 Продолжить
               </button>
               <button
-                onClick={() => setGameState('menu')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setGameState('menu');
+                }}
                 className="px-4 py-2 md:px-8 md:py-3 bg-red-500 text-white text-sm md:text-xl font-bold rounded-full hover:bg-red-400 transition-all"
               >
                 Выход
@@ -1856,14 +1950,33 @@ export default function Game() {
           </div>
         )}
 
-        {/* Кнопка паузы */}
+        {/* Кнопка паузы - размещена по центру экрана */}
         {gameState === 'playing' && (
           <button
             onClick={(e) => {
+              e.preventDefault();
               e.stopPropagation();
+              initializeAudio(); // Инициализируем аудио при клике
               setGameState('paused');
             }}
-            className="absolute top-2 left-2 md:left-4 px-4 py-1 md:px-6 md:py-2 bg-cyan-500/20 text-cyan-400 text-sm md:text-base font-bold rounded-full hover:bg-cyan-500/30 transition-all z-10"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onMouseUp={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            className="absolute top-2 left-1/2 -translate-x-1/2 px-4 py-1 md:px-6 md:py-2 bg-cyan-500/20 text-cyan-400 text-sm md:text-base font-bold rounded-full hover:bg-cyan-500/30 transition-all z-50"
+            style={{ pointerEvents: 'auto' }}
           >
             ⏸️ Пауза
           </button>

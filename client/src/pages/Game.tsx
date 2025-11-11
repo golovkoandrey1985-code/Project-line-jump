@@ -1579,7 +1579,7 @@ export default function Game() {
       className="min-h-screen flex items-start justify-center bg-gradient-to-b from-gray-900 to-gray-800"
     >
       <div className="relative flex flex-col">
-        {/* Settings toggle - размещена в правом верхнем углу, под окном с очками */}
+        {/* Settings toggle - размещена в правом верхнем углу, выше иконок способностей */}
         {(gameState === 'playing' || gameState === 'menu') && (
           <button
             onClick={(e) => {
@@ -1604,7 +1604,7 @@ export default function Game() {
               e.preventDefault();
               e.stopPropagation();
             }}
-            className="absolute top-20 right-2 md:right-4 px-3 py-1 bg-white/10 text-white text-sm rounded-full hover:bg-white/20 transition-all z-[100]"
+            className="absolute top-2 right-2 md:right-4 px-3 py-1 bg-white/10 text-white text-sm rounded-full hover:bg-white/20 transition-all z-[100]"
             style={{ pointerEvents: 'auto', position: 'absolute' }}
           >
             ⚙️
@@ -1614,7 +1614,7 @@ export default function Game() {
         {/* Settings panel */}
         {showSettings && (gameState === 'playing' || gameState === 'menu') && (
           <div 
-            className="absolute top-28 right-2 md:right-4 w-64 p-3 rounded-lg bg-gray-900/90 border border-white/10 z-[100] space-y-3"
+            className="absolute top-10 right-2 md:right-4 w-64 p-3 rounded-lg bg-gray-900/90 border border-white/10 z-[100] space-y-3"
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
@@ -1967,7 +1967,7 @@ export default function Game() {
           </div>
         )}
 
-        {/* Кнопка паузы - размещена справа от окна счета */}
+        {/* Кнопка паузы - размещена справа от окна счета, но левее сердец */}
         {gameState === 'playing' && (
           <button
             onClick={(e) => {
@@ -1992,7 +1992,7 @@ export default function Game() {
               e.preventDefault();
               e.stopPropagation();
             }}
-            className="absolute top-2 left-[180px] md:left-[200px] px-3 py-1 md:px-4 md:py-2 bg-cyan-500/20 text-cyan-400 text-xs md:text-sm font-bold rounded-full hover:bg-cyan-500/30 transition-all z-[100]"
+            className="absolute top-2 left-[100px] md:left-[120px] px-2 py-1 md:px-3 md:py-1.5 bg-cyan-500/20 text-cyan-400 text-xs md:text-sm font-bold rounded-full hover:bg-cyan-500/30 transition-all z-[100]"
             style={{ pointerEvents: 'auto', position: 'absolute' }}
           >
             ⏸️ Пауза

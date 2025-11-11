@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { getCurrentLevel, setCurrentLevel, getLevelConfig, unlockLevel, isLevelUnlocked, LEVELS } from '../levels';
+import { useAudio } from '@/lib/audio';
+import { useSettings } from '@/contexts/SettingsContext';
 
 // Константы для расчета размеров
 const getCanvasSize = () => {
@@ -177,6 +179,11 @@ export default function Game() {
 
   // Throttled score
   const lastScoreUpdateTimeRef = useRef(0);
+
+  // Audio & settings
+  const audio = useAudio();
+  const { muted, setMuted, volume, setVolume } = useSettings();
+  const [showSettings, setShowSettings] = useState(false);
   
   // Параллакс фона
   const bgOffsetRef = useRef(0);
@@ -268,6 +275,7 @@ export default function Game() {
       const jumpPower = hasTripleJump ? -22 : HIGH_JUMP_POWER;
       playerVelocityYRef.current = jumpPower;
       isJumpingRef.current = true;
+      audio.jump();
       setShowDoubleTapIndicator(false);
 
       if (hasTripleJump) {
@@ -290,6 +298,7 @@ export default function Game() {
       hasFallbackAirJumpRef.current = true;
       setShowDoubleTapIndicator(false);
       createParticles(PLAYER_X_POSITION, playerYRef.current + PLAYER_SIZE, COLORS.player, 8);
+      audio.jump();
       return;
     }
 
@@ -809,6 +818,7 @@ export default function Game() {
         if (nextLevelId <= LEVELS.length) {
           unlockLevel(nextLevelId);
         }
+        audio.levelComplete();
         
         // Обновляем Career Score (НЕ обнуляем score!)
         const newCareerScore = careerScore + currentScore;
@@ -1075,6 +1085,7 @@ export default function Game() {
           const newLives = lives - 1;
           setLives(newLives);
           invincibleUntilRef.current = now + 1000;
+          audio.hit();
 
           // Отключаем все активные способности при получении урона
           if (hasMagnet) {
@@ -1159,6 +1170,7 @@ export default function Game() {
           createParticles(star.x, star.y, COLORS.star, 12);
           const newLives = Math.min(lives + 1, MAX_LIVES);
           setLives(newLives);
+          audio.star();
           
           // Счетчик последовательных звездочек для щита
           consecutiveStarsRef.current += 1;
@@ -1450,6 +1462,43 @@ export default function Game() {
       style={{ touchAction: 'none' }}
     >
       <div className="relative flex flex-col">
+        {/* Settings toggle */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowSettings((s) => !s);
+          }}
+          className="absolute top-2 right-2 md:right-4 px-3 py-1 bg-white/10 text-white text-sm rounded-full hover:bg-white/20 transition-all z-20"
+        >
+          ⚙️
+        </button>
+
+        {/* Settings panel */}
+        {showSettings && (
+          <div className="absolute top-10 right-2 md:right-4 w-64 p-3 rounded-lg bg-gray-900/90 border border-white/10 z-20 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-white/80">Звук</span>
+              <button
+                onClick={() => setMuted(!muted)}
+                className="px-2 py-1 rounded bg-gray-800 text-white text-xs hover:bg-gray-700"
+              >
+                {muted ? 'Включить' : 'Выключить'}
+              </button>
+            </div>
+            <div>
+              <div className="text-xs text-white/60 mb-1">Громкость: {(volume * 100) | 0}%</div>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={volume}
+                onChange={(e) => setVolume(parseFloat(e.target.value))}
+                className="w-full accent-cyan-400"
+              />
+            </div>
+          </div>
+        )}
         <canvas
           ref={canvasRef}
           width={CANVAS_WIDTH}

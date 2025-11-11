@@ -205,10 +205,21 @@ export default function Game() {
   const { muted, setMuted, volume, setVolume, enableDoubleTap, enableVibration, setEnableDoubleTap, setEnableVibration } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
   
-  // Сбрасываем показ настроек при смене состояния игры
+  // Сбрасываем показ настроек при смене состояния игры (кроме menu и playing)
   useEffect(() => {
     if (gameState !== 'playing' && gameState !== 'menu') {
       setShowSettings(false);
+    }
+  }, [gameState]);
+  
+  // Сбрасываем показ настроек при старте новой игры
+  useEffect(() => {
+    if (gameState === 'playing') {
+      // Небольшая задержка, чтобы убедиться, что игра действительно запущена
+      const timer = setTimeout(() => {
+        setShowSettings(false);
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [gameState]);
 
@@ -1574,6 +1585,41 @@ export default function Game() {
     return () => cancelAnimationFrame(animationId);
   }, [gameState, lives, score, highScore]);
 
+  // Обработчик клика вне панели настроек для закрытия
+  useEffect(() => {
+    if (!showSettings) return;
+    
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target) return;
+      
+      // Проверяем, что клик не внутри панели настроек
+      const settingsPanel = target.closest('.bg-gray-900\\/90');
+      if (settingsPanel) return;
+      
+      // Проверяем, что клик не по кнопке настроек
+      const clickedButton = target.closest('button');
+      if (clickedButton) {
+        // Если это кнопка настроек (шестеренка), не закрываем
+        if (clickedButton.textContent?.includes('⚙️') || clickedButton.getAttribute('aria-label') === 'Закрыть настройки') {
+          return;
+        }
+      }
+      
+      // Закрываем панель
+      setShowSettings(false);
+    };
+    
+    // Используем capture phase для более раннего перехвата
+    document.addEventListener('mousedown', handleClickOutside, true);
+    document.addEventListener('touchstart', handleClickOutside, true);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside, true);
+      document.removeEventListener('touchstart', handleClickOutside, true);
+    };
+  }, [showSettings]);
+
   return (
     <div 
       className="min-h-screen flex items-start justify-center bg-gradient-to-b from-gray-900 to-gray-800"
@@ -1585,27 +1631,33 @@ export default function Game() {
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              e.stopImmediatePropagation();
               initializeAudio(); // Инициализируем аудио при клике
               setShowSettings((prev) => !prev);
             }}
             onMouseDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              e.stopImmediatePropagation();
             }}
             onTouchStart={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              e.stopImmediatePropagation();
             }}
             onMouseUp={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              e.stopImmediatePropagation();
             }}
             onTouchEnd={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              e.stopImmediatePropagation();
             }}
             className="absolute top-2 right-2 md:right-4 px-3 py-1 bg-white/10 text-white text-sm rounded-full hover:bg-white/20 transition-all z-[100]"
             style={{ pointerEvents: 'auto', position: 'absolute', touchAction: 'manipulation' }}
+            type="button"
           >
             ⚙️
           </button>
@@ -1619,6 +1671,21 @@ export default function Game() {
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
           >
+            {/* Кнопка закрытия */}
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm font-bold text-white/90">Настройки</span>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowSettings(false);
+                }}
+                className="px-2 py-1 text-white/80 hover:text-white hover:bg-white/10 rounded transition-colors"
+                aria-label="Закрыть настройки"
+              >
+                ✕
+              </button>
+            </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-white/80">Звук</span>
               <button
@@ -1688,7 +1755,7 @@ export default function Game() {
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
           className="border-4 border-cyan-500 rounded-lg shadow-2xl cursor-pointer"
-          style={{ pointerEvents: gameState === 'playing' ? 'auto' : 'none' }}
+          style={{ pointerEvents: gameState === 'playing' && !showSettings ? 'auto' : 'none' }}
           onTouchStart={(e) => {
             // Проверяем, что клик не по кнопке - проверяем элемент под точкой касания
             const touch = e.touches[0];
@@ -1995,27 +2062,33 @@ export default function Game() {
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              e.stopImmediatePropagation();
               initializeAudio(); // Инициализируем аудио при клике
               setGameState('paused');
             }}
             onMouseDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              e.stopImmediatePropagation();
             }}
             onTouchStart={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              e.stopImmediatePropagation();
             }}
             onMouseUp={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              e.stopImmediatePropagation();
             }}
             onTouchEnd={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              e.stopImmediatePropagation();
             }}
             className="absolute top-2 left-[100px] md:left-[120px] px-2 py-1 md:px-3 md:py-1.5 bg-cyan-500/20 text-cyan-400 text-xs md:text-sm font-bold rounded-full hover:bg-cyan-500/30 transition-all z-[100]"
             style={{ pointerEvents: 'auto', position: 'absolute', touchAction: 'manipulation' }}
+            type="button"
           >
             ⏸️ Пауза
           </button>

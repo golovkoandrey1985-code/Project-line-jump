@@ -23,6 +23,13 @@ const HIGH_JUMP_POWER = -18; // для высоких препятствий (у
 const DOUBLE_TAP_THRESHOLD = 400; // мс - максимальное время между тапами
 const MIN_DOUBLE_TAP_INTERVAL = 50; // мс - минимальное время между тапами (защита от случайных срабатываний)
 
+// Forgiveness mechanics
+const COYOTE_TIME_MS = 120; // время после схода с платформы, когда прыжок ещё возможен
+const JUMP_BUFFER_MS = 150; // время, в течение которого нажатие "запоминается" до возможности прыжка
+
+// UI/score throttling
+const SCORE_UPDATE_INTERVAL_MS = 150;
+
 // Препятствия (базовые настройки)
 const MIN_OBSTACLE_DISTANCE = 400; // увеличено с 300
 const INITIAL_DELAY = 2000; // задержка перед первым препятствием
@@ -151,6 +158,15 @@ export default function Game() {
   const [showDoubleTapIndicator, setShowDoubleTapIndicator] = useState(false);
   const waitingForSecondTapRef = useRef(false); // Флаг ожидания второго тапа
   const invincibleUntilRef = useRef(0);
+
+  // Forgiveness/inputs
+  const lastGroundedTimeRef = useRef(0);
+  const lastJumpPressedTimeRef = useRef<number | null>(null);
+  const isInputDownRef = useRef(false);
+  const isKeyHeldRef = useRef(false);
+
+  // Throttled score
+  const lastScoreUpdateTimeRef = useRef(0);
   
   // Параллакс фона
   const bgOffsetRef = useRef(0);
@@ -168,6 +184,7 @@ export default function Game() {
   const lastTripleJumpScoreRef = useRef(0); // Последний счет когда был активирован тройной прыжок
   const lastMagnetScoreRef = useRef(0); // Последний счет когда был активирован магнит
   const consecutiveStarsRef = useRef(0); // Для щита
+  const hasFallbackAirJumpRef = useRef(false); // Разрешает один доп. прыжок при падении, если второй тап не использован
 
   // Сброс игры
   const resetGame = (keepScore: boolean = false) => {
@@ -191,6 +208,7 @@ export default function Game() {
     setHasMagnet(false);
     magnetEndTimeRef.current = 0;
     consecutiveStarsRef.current = 0;
+    hasFallbackAirJumpRef.current = false;
     if (!keepScore) {
       setScore(0);
       setBaseScore(0);
@@ -217,59 +235,59 @@ export default function Game() {
     }
   };
 
-  // Обработка тапа/клика (улучшенная механика двойного тапа)
-  const handleTap = () => {
+  // Обработка нажатия/отпускания (унифицированный ввод)
+  const handlePressDown = () => {
     if (gameState !== 'playing') return;
+    isInputDownRef.current = true;
 
     const now = Date.now();
-    const timeSinceLastTap = now - lastTapTimeRef.current;
     const groundY = CANVAS_HEIGHT - GROUND_HEIGHT - PLAYER_SIZE;
     const isOnGround = playerYRef.current === groundY;
-    const isInAir = !isOnGround;
+    const isFalling = playerVelocityYRef.current > 0;
+    // Запоминаем намерение прыгнуть (jump buffer)
+    lastJumpPressedTimeRef.current = now;
 
-    // Случай 1: Второй тап в воздухе (двойной тап) - работает в любой момент полета!
-    if (waitingForSecondTapRef.current && 
-        timeSinceLastTap >= MIN_DOUBLE_TAP_INTERVAL && 
-        timeSinceLastTap <= DOUBLE_TAP_THRESHOLD) {
-      // Высокий прыжок или тройной (если есть способность)
-      const jumpPower = hasTripleJump ? -22 : HIGH_JUMP_POWER; // Тройной прыжок еще выше
+    // Логика для двойного тапа (высокий/тройной прыжок) — если окно активно
+    const timeSinceLastTap = now - lastTapTimeRef.current;
+    if (
+      waitingForSecondTapRef.current &&
+      timeSinceLastTap >= MIN_DOUBLE_TAP_INTERVAL &&
+      timeSinceLastTap <= DOUBLE_TAP_THRESHOLD
+    ) {
+      const jumpPower = hasTripleJump ? -22 : HIGH_JUMP_POWER;
       playerVelocityYRef.current = jumpPower;
       isJumpingRef.current = true;
       setShowDoubleTapIndicator(false);
-      
+
       if (hasTripleJump) {
-        // Радужный эффект для тройного прыжка
         createParticles(PLAYER_X_POSITION, playerYRef.current + PLAYER_SIZE, '#ff00ff', 12);
         createParticles(PLAYER_X_POSITION, playerYRef.current + PLAYER_SIZE, '#00ffff', 12);
       } else {
         createParticles(PLAYER_X_POSITION, playerYRef.current + PLAYER_SIZE, '#ffd700', 8);
       }
-      
+
       waitingForSecondTapRef.current = false;
       lastTapTimeRef.current = 0;
       return;
     }
 
-    // Случай 2: Первый тап на земле
-    if (isOnGround) {
-      // Обычный прыжок
-      playerVelocityYRef.current = JUMP_POWER;
+    // Если окно второго тапа уже закрыто, разрешаем один раз прыжок при падении
+    if (!isOnGround && isFalling && !waitingForSecondTapRef.current && !hasFallbackAirJumpRef.current) {
+      const jumpPower = hasTripleJump ? -22 : HIGH_JUMP_POWER;
+      playerVelocityYRef.current = jumpPower;
       isJumpingRef.current = true;
-      createParticles(PLAYER_X_POSITION, playerYRef.current + PLAYER_SIZE, COLORS.player, 5);
-      
-      // Начинаем ожидать второй тап
-      waitingForSecondTapRef.current = true;
-      setShowDoubleTapIndicator(true);
-      
-      // Автоматически сбрасываем через DOUBLE_TAP_THRESHOLD
-      setTimeout(() => {
-        waitingForSecondTapRef.current = false;
-        setShowDoubleTapIndicator(false);
-      }, DOUBLE_TAP_THRESHOLD);
-      
-      lastTapTimeRef.current = now;
+      hasFallbackAirJumpRef.current = true;
+      setShowDoubleTapIndicator(false);
+      createParticles(PLAYER_X_POSITION, playerYRef.current + PLAYER_SIZE, COLORS.player, 8);
+      return;
     }
-    // Тапы в воздухе без активного окна двойного тапа игнорируются
+
+    // Перезапускаем окно для второго тапа при первом прыжке
+    lastTapTimeRef.current = now;
+  };
+
+  const handlePressUp = () => {
+    isInputDownRef.current = false;
   };
 
   // Динамическое изменение размера canvas
@@ -290,18 +308,36 @@ export default function Game() {
     };
   }, []);
 
-  // Обработчик клавиатуры
+  // Обработчики клавиатуры: press/release
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {      if (e.key === 'Escape' && gameState === 'playing') {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && gameState === 'playing') {
         setGameState('paused');
-      } else if (e.key === ' ' || e.key === 'ArrowUp') {
+        return;
+      }
+      if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'Enter') {
         e.preventDefault();
-        handleTap();
+        if (!isKeyHeldRef.current) {
+          isKeyHeldRef.current = true;
+          handlePressDown();
+        }
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'Enter') {
+        e.preventDefault();
+        isKeyHeldRef.current = false;
+        handlePressUp();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
   }, [gameState]);
 
   // Игровой цикл
@@ -318,6 +354,8 @@ export default function Game() {
     const groundY = CANVAS_HEIGHT - GROUND_HEIGHT - PLAYER_SIZE;
 
     const gameLoop = () => {
+      // Определяем текущее время в самом начале цикла
+      const now = Date.now();
       // Обновляем параллакс только во время игры
       if (gameState === 'playing') {
         bgOffsetRef.current += 2; // Движение фона
@@ -674,8 +712,14 @@ export default function Game() {
         ctx.fillRect(0, CANVAS_HEIGHT - 4, CANVAS_WIDTH, 4);
       }
 
-      // Обновляем физику игрока
-      playerVelocityYRef.current += GRAVITY;
+      // Обновляем физику игрока с переменной высотой прыжка
+      const risingBefore = playerVelocityYRef.current < 0;
+      let effectiveGravity = GRAVITY;
+      if (risingBefore) {
+        // При удержании — слабее тянет вниз; при отпускании — сильнее
+        effectiveGravity = isInputDownRef.current ? 0.55 : 1.6;
+      }
+      playerVelocityYRef.current += effectiveGravity;
       playerYRef.current += playerVelocityYRef.current;
 
       // Проверка приземления
@@ -683,13 +727,46 @@ export default function Game() {
         playerYRef.current = groundY;
         playerVelocityYRef.current = 0;
         isJumpingRef.current = false;
+        lastGroundedTimeRef.current = now;
+        hasFallbackAirJumpRef.current = false; // Сбрасываем возможность fallback-прыжка после приземления
       }
+
+      // Coyote time + Jump buffer: Выполнить прыжок, если есть намерение и мы в окне прощения
+      if (lastJumpPressedTimeRef.current !== null) {
+        const pressedAgo = now - lastJumpPressedTimeRef.current;
+        const sinceGrounded = now - lastGroundedTimeRef.current;
+        const canBufferedJump =
+          pressedAgo <= JUMP_BUFFER_MS && sinceGrounded <= COYOTE_TIME_MS && !isJumpingRef.current;
+        if (canBufferedJump) {
+          playerVelocityYRef.current = JUMP_POWER;
+          isJumpingRef.current = true;
+          createParticles(PLAYER_X_POSITION, playerYRef.current + PLAYER_SIZE, COLORS.player, 5);
+
+          // Активируем окно второго тапа
+          waitingForSecondTapRef.current = true;
+          setShowDoubleTapIndicator(true);
+          setTimeout(() => {
+            waitingForSecondTapRef.current = false;
+            setShowDoubleTapIndicator(false);
+          }, DOUBLE_TAP_THRESHOLD);
+
+          // Погасить буфер
+          lastJumpPressedTimeRef.current = null;
+        }
+      }
+
+      // Примечание: переменная высота прыжка реализована через effectiveGravity выше
 
       // Увеличиваем дистанцию
       distanceRef.current += 1;
       const levelScore = Math.floor(distanceRef.current / 10);
       const currentScore = baseScore + levelScore;
-      setScore(currentScore);
+
+      // Обновляем видимый счет с троттлингом
+      if (now - lastScoreUpdateTimeRef.current >= SCORE_UPDATE_INTERVAL_MS || lastScoreUpdateTimeRef.current === 0) {
+        setScore(currentScore);
+        lastScoreUpdateTimeRef.current = now;
+      }
       
       // Проверяем получение способностей (повторяющиеся каждые N очков)
       // Тройной прыжок - каждые 500 очков, длительность 15 секунд
@@ -732,7 +809,6 @@ export default function Game() {
         return;
       }
 
-      const now = Date.now();
       
       // === ПОГОДНАЯ СИСТЕМА ===
       
@@ -1316,12 +1392,23 @@ export default function Game() {
       onTouchStart={(e) => {
         if (gameState === 'playing') {
           e.preventDefault();
-          handleTap();
+          handlePressDown();
         }
       }}
-      onClick={() => {
+      onTouchEnd={(e) => {
         if (gameState === 'playing') {
-          handleTap();
+          e.preventDefault();
+          handlePressUp();
+        }
+      }}
+      onMouseDown={() => {
+        if (gameState === 'playing') {
+          handlePressDown();
+        }
+      }}
+      onMouseUp={() => {
+        if (gameState === 'playing') {
+          handlePressUp();
         }
       }}
       style={{ touchAction: 'none' }}
@@ -1335,9 +1422,23 @@ export default function Game() {
           onTouchStart={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            handleTap();
+            handlePressDown();
           }}
-          onClick={handleTap}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handlePressUp();
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handlePressDown();
+          }}
+          onMouseUp={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handlePressUp();
+          }}
           style={{ touchAction: 'none' }}
         />
         

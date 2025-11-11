@@ -1031,8 +1031,20 @@ export default function Game() {
         }
       }
 
-      // Спаун звездочек
-      if (now - lastStarTimeRef.current > 10000) {
+      // Спаун звездочек с динамическим кулдауном (8-15 секунд, зависит от сложности)
+      const starCooldownBase = 10000; // база 10 секунд
+      const starCooldownVariation = 5000; // вариация ±5 секунд
+      const starCooldownMin = 8000; // минимум 8 секунд
+      const starCooldownMax = 15000; // максимум 15 секунд
+      const difficultyFactor = Math.min(steps * 0.1, 1.0); // увеличиваем кулдаун с ростом сложности
+      const starCooldown = Math.max(
+        starCooldownMin,
+        Math.min(
+          starCooldownMax,
+          starCooldownBase + starCooldownVariation * difficultyFactor - Math.random() * 2000
+        )
+      );
+      if (now - lastStarTimeRef.current > starCooldown) {
         starsRef.current.push({
           x: CANVAS_WIDTH,
           y: CANVAS_HEIGHT - GROUND_HEIGHT - 60 - Math.random() * 40, // опущено ниже для доступности
@@ -1179,15 +1191,36 @@ export default function Game() {
         
         if (distance < (PLAYER_SIZE + collectRadius) / 2) {
           createParticles(star.x, star.y, COLORS.star, 12);
-          const newLives = Math.min(lives + 1, MAX_LIVES);
-          setLives(newLives);
           audio.star();
           
-          // Счетчик последовательных звездочек для щита
-          consecutiveStarsRef.current += 1;
-          if (consecutiveStarsRef.current >= 3 && !hasShield) {
-            setHasShield(true);
-            createParticles(PLAYER_X_POSITION, playerYRef.current, '#00ffff', 20);
+          // Если жизни на максимуме, конвертируем в бонусы
+          if (lives >= MAX_LIVES) {
+            // Приоритет: если нет щита, даём щит; иначе +50 очков
+            if (!hasShield) {
+              setHasShield(true);
+              createParticles(PLAYER_X_POSITION, playerYRef.current, '#00ffff', 20);
+            } else {
+              // Конвертируем в очки
+              const bonusScore = 50;
+              const newScore = currentScore + bonusScore;
+              setScore(newScore);
+              setBaseScore(baseScore + bonusScore);
+              // Визуальная индикация конверсии
+              createParticles(star.x, star.y, '#ffd700', 15);
+            }
+          } else {
+            // Обычное восстановление жизни
+            const newLives = Math.min(lives + 1, MAX_LIVES);
+            setLives(newLives);
+          }
+          
+          // Счетчик последовательных звездочек для щита (только если не на максимуме жизней)
+          if (lives < MAX_LIVES) {
+            consecutiveStarsRef.current += 1;
+            if (consecutiveStarsRef.current >= 3 && !hasShield) {
+              setHasShield(true);
+              createParticles(PLAYER_X_POSITION, playerYRef.current, '#00ffff', 20);
+            }
           }
           
           return false;

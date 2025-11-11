@@ -375,6 +375,20 @@ export default function Game() {
     };
   }, [gameState]);
 
+  // Пауза при потере фокуса вкладки
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && gameState === 'playing') {
+        setGameState('paused');
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [gameState]);
+
   // Игровой цикл
   useEffect(() => {
     if (gameState !== 'playing') return;
